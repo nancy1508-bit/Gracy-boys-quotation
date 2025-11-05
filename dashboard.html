@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Gracy Boys - Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/html2pdf.js@0.9.3/dist/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="card header">
+      <h1 style="margin:0;font-size:18px">Saved Quotations</h1>
+      <div class="controls">
+        <a href="/" class="btn">New Quotation</a>
+        <button id="refresh" class="btn secondary">Refresh</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="dashboard-list" id="list">
+        <thead>
+          <tr><th>Client</th><th>Date</th><th>Total (₹)</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const rowsEl = document.getElementById('rows');
+const refreshBtn = document.getElementById('refresh');
+
+async function fetchList(){
+  try {
+    const res = await fetch('/api/quotations');
+    const list = await res.json();
+    render(list);
+  } catch (err) {
+    alert('Could not fetch list: ' + err.message);
+  }
+}
+
+function render(list){
+  rowsEl.innerHTML = '';
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+    const clientTd = document.createElement('td');
+    clientTd.textContent = item.clientName || '(no client)';
+    const dateTd = document.createElement('td');
+    dateTd.textContent = item.date ? new Date(item.date).toLocaleString() : new Date(item.created_at).toLocaleString();
+    const totalTd = document.createElement('td');
+    totalTd.textContent = (item.total || 0).toLocaleString('en-IN', {minimumFractionDigits:2});
+    const actionsTd = document.createElement('td');
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Edit';
+    editBtn.className = 'btn ghost small';
+    editBtn.addEventListener('click', () => {
+      window.location = '/?id=' + item.id;
+    });
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = 'Download';
+    downloadBtn.className = 'btn small';
+    downloadBtn.addEventListener('click', () => downloadPDF(item));
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Delete';
+    delBtn.className = 'btn secondary small';
+    delBtn.addEventListener('click', () => remove(item.id));
+
+    actionsTd.appendChild(editBtn);
+    actionsTd.appendChild(downloadBtn);
+    actionsTd.appendChild(delBtn);
+
+    tr.appendChild(clientTd);
+    tr.appendChild(dateTd);
+    tr.appendChild(totalTd);
+    tr.appendChild(actionsTd);
+    rowsEl.appendChild(tr);
+  });
+}
+
+async function remove(id){
+  if (!confirm('Delete this quotation?')) return;
+  await fetch('/api/quotations/' + id, {method:'DELETE'});
+  await fetchList();
+}
+
+async function downloadPDF(item){
+  const container = document.createElement('div');
+  container.style.padding = '24px';
+  container.style.fontFamily = "Arial, sans-serif";
+  container.innerHTML = `
+    <img src="letterpad.png" style="max-width:100%;height:auto;margin-bottom:12px" />
+    <div style="text-align:center;font-weight:700;letter-spacing:1px;margin-bottom:6px">QUOTATION ESTIMATE</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+      <div><strong>To:</strong> ${escapeHtml(item.clientName || '')}<div style="color:#6b6b6b">${escapeHtml(item.eventTitle||'')}</div></div>
+      <div style="text-align:right"><strong>Date:</strong> ${new Date(item.date||item.created_at).toLocaleDateString()}</div>
+    </div>
+    <div style="margin-top:8px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#faf9f8;color:#8b3b1a;font-weight:700;text-transform:uppercase"><th style="border:1px solid #e7e7e7;padding:8px;text-align:left">Requirements</th><th style="border:1px solid #e7e7e7;padding:8px;text-align:right">Amount</th><th style="border:1px solid #e7e7e7;padding:8px;text-align:left">Remark</th></tr></thead>
+        <tbody>
+          ${(item.items || []).map(it=>`<tr><td style="border:1px solid #e7e7e7;padding:8px">${escapeHtml(it.requirement||'')}</td><td style="border:1px solid #e7e7e7;padding:8px;text-align:right">₹ ${Number(it.amount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</td><td style="border:1px solid #e7e7e7;padding:8px">${escapeHtml(it.remark||'')}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;align-items:center">
+      <div style="font-weight:700;margin-right:12px">Total Estimate</div>
+      <div style="color:#e74c3c;font-weight:800">₹ ${Number(item.total||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
+    </div>
+    <div style="margin-top:16px;color:#6b6b6b">${escapeHtml(item.notes || '')}</div>
+  `;
+  const opt = {
+    margin:       [10, 10, 10, 10],
+    filename:     (item.clientName ? item.clientName.replace(/\s+/g,'_') + '_quotation.pdf' : 'quotation.pdf'),
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+  html2pdf().set(opt).from(container).save();
+}
+
+function escapeHtml(s) {
+  return (s || '').toString().replace(/[&<>"']/g, function(m) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+
+refreshBtn.addEventListener('click', fetchList);
+fetchList();
+</script>
+</body>
+</html>
