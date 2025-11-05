@@ -3,665 +3,546 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gracy Boy's Quotation Maker</title>
-    <!-- Load Tailwind CSS -->
+    <title>Event Quotation System</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Inter font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
-    <!-- Load jsPDF and html2canvas for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Custom font for the main company name */
-        .gracy-font {
-            font-family: 'Playfair Display', serif;
+        body {
+            font-family: 'Inter', sans-serif;
         }
-        /* Custom print styling to hide dashboard and controls */
+        /* Custom CSS for Print View */
         @media print {
-            .no-print {
-                display: none !important;
+            /* Hide non-document elements */
+            #app-container > :not(#printable-quotation) {
+                display: none;
             }
-            body {
+            /* Ensure printable area is full width/height */
+            html, body {
+                height: 100%;
                 margin: 0;
                 padding: 0;
+                overflow: hidden;
             }
-            .quotation-page {
-                box-shadow: none !important;
-                border: none !important;
+            /* Ensure quotation takes full viewport */
+            #printable-quotation {
                 width: 100% !important;
-                min-height: 100vh;
-                margin: 0;
-                padding: 1rem;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
-            .editable-cell {
-                -webkit-print-color-adjust: exact;
+            /* Adjust input fields for print (make them look like plain text) */
+            input, textarea {
                 border: none !important;
-                outline: none !important;
+                padding: 0 !important;
                 background-color: transparent !important;
+                outline: none !important;
+                pointer-events: none; /* Disable interaction on print */
             }
-            #quotation-table td, #quotation-table th {
-                padding-top: 0.5rem;
-                padding-bottom: 0.5rem;
+             /* Ensure total row is visible */
+            tfoot tr:last-child {
+                break-before: auto;
             }
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center" style="font-family: 'Inter', sans-serif;">
+<body class="bg-gray-200">
 
-    <!-- Main Application Container -->
-    <div id="app" class="w-full max-w-7xl">
-        <!-- Dashboard Toggle Button -->
-        <div class="mb-4 flex justify-between items-center no-print">
-            <button id="toggle-dashboard" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
-                View Saved Quotations
-            </button>
-            <span id="user-info" class="text-sm text-gray-600"></span>
-        </div>
-
-        <!-- DASHBOARD VIEW -->
-        <div id="dashboard-view" class="hidden bg-white p-6 rounded-xl shadow-2xl transition duration-300">
-            <h2 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">Saved Quotations Dashboard</h2>
-            <div id="quotations-list" class="space-y-4">
-                <p class="text-gray-500">Loading quotations...</p>
-            </div>
-        </div>
-
-        <!-- QUOTATION EDITOR VIEW -->
-        <div id="editor-view" class="w-full">
-            <div id="quotation-page" class="quotation-page bg-white p-8 md:p-12 rounded-xl shadow-2xl border border-gray-200">
-
-                <!-- LETTERHEAD HEADER -->
-                <header class="text-center mb-6 border-b-2 border-orange-500 pb-4">
-                    <p class="text-xs tracking-widest text-orange-600 mb-1">CHENNAI</p>
-                    <h1 class="text-5xl font-extrabold text-gray-800 gracy-font tracking-tighter">GRACY BOY'S</h1>
-                    <p class="text-sm font-light text-gray-600 mt-1">A & Z EVENT COMPANY</p>
-                    <p class="text-xs mt-3 font-medium text-gray-700">SAINAGAR 1ST MAIN ROAD VIRUGAMBAKKAM Ch:600092</p>
-                </header>
-                <!-- END LETTERHEAD HEADER -->
-
-                <h2 class="text-2xl font-bold text-gray-700 mb-6 text-center">QUOTATION ESTIMATE</h2>
-
-                <!-- CUSTOMER DETAILS -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-gray-700">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Quotation ID:</label>
-                        <p id="quote-id" class="font-mono text-xs bg-gray-100 p-2 rounded-lg"></p>
-                    </div>
-                    <div>
-                        <label for="date-input" class="block text-sm font-medium mb-1">Date:</label>
-                        <input type="date" id="date-input" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="client-name" class="block text-sm font-medium mb-1">Client Name / Project Title:</label>
-                        <input type="text" id="client-name" placeholder="E.g., Wedding Event for Mr. & Mrs. S. Kumar" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-                    </div>
-                </div>
-
-                <!-- QUOTATION ITEMS TABLE -->
-                <div class="overflow-x-auto shadow-md rounded-lg mb-8 border border-gray-200">
-                    <table id="quotation-table" class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-indigo-500 text-white">
-                            <tr>
-                                <th class="w-1/2 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Requirements (Description)</th>
-                                <th class="w-1/4 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider">Amount (₹)</th>
-                                <th class="w-1/4 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Remark</th>
-                                <th class="no-print w-16 px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="quote-body" class="bg-white divide-y divide-gray-200">
-                            <!-- Rows injected here by JavaScript -->
-                        </tbody>
-                        <tfoot>
-                            <tr class="bg-gray-50 border-t border-gray-300">
-                                <td class="px-4 py-3 font-bold text-lg text-right text-gray-800">TOTAL:</td>
-                                <td id="total-amount" class="px-4 py-3 font-extrabold text-xl text-right text-indigo-600" data-total="0">₹ 0.00</td>
-                                <td class="px-4 py-3" colspan="2"></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-                <!-- END QUOTATION ITEMS TABLE -->
-
-                <!-- ACTION BUTTONS (NO PRINT) -->
-                <div class="flex flex-wrap gap-4 mb-8 no-print justify-start">
-                    <button id="add-item-btn" class="px-4 py-2 bg-green-500 text-white font-medium rounded-lg shadow-md hover:bg-green-600 transition duration-150 flex items-center">
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        Add Item
-                    </button>
-                    <button id="save-btn" class="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg shadow-md hover:bg-blue-600 transition duration-150 flex items-center">
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                        Save Quote
-                    </button>
-                    <button id="download-btn" class="px-4 py-2 bg-red-500 text-white font-medium rounded-lg shadow-md hover:bg-red-600 transition duration-150 flex items-center">
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l3-3m-3 3l-3-3m6 7H5a2 2 0 01-2-2v-8a2 2 0 012-2h3"></path></svg>
-                        Download PDF
-                    </button>
-                    <button id="new-quote-btn" class="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg shadow-md hover:bg-gray-100 transition duration-150 flex items-center">
-                        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12a7 7 0 01-7 7l-7 7"></path></svg>
-                        New Quote
-                    </button>
-                </div>
-                
-                <!-- STATUS MESSAGE -->
-                <div id="status-message" class="text-sm text-center font-medium text-gray-700 h-6"></div>
-
-                <!-- LETTERHEAD FOOTER -->
-                <footer class="mt-8 pt-4 border-t-2 border-orange-500 text-center text-sm text-gray-700">
-                    <p class="font-semibold text-gray-800">MASTER: ARUL DOSS D</p>
-                    <p class="text-xs mt-1">
-                        PH: <span class="font-mono">+91 8838414818</span> \ <span class="font-mono">+91 7358286678</span>
-                    </p>
-                    <p class="mt-4 text-xs italic text-gray-500">Thank you for your business.</p>
-                </footer>
-                <!-- END LETTERHEAD FOOTER -->
-
-            </div>
-        </div>
+    <div id="app-container" class="min-h-screen">
+        <!-- Navigation and App Content will be rendered here -->
     </div>
 
-    <!-- Firebase Initialization Script -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Set Firebase Log Level to Debug
-        setLogLevel('Debug');
-
-        // --- GLOBAL VARIABLES ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    <script>
+        // --- Configuration & State ---
+        const STORAGE_KEY = 'eventQuotations_html_v1';
         
-        // --- DOM ELEMENTS ---
-        const editorView = document.getElementById('editor-view');
-        const dashboardView = document.getElementById('dashboard-view');
-        const toggleDashboardBtn = document.getElementById('toggle-dashboard');
-        const quoteBody = document.getElementById('quote-body');
-        const totalAmountEl = document.getElementById('total-amount');
-        const quoteIdEl = document.getElementById('quote-id');
-        const dateInput = document.getElementById('date-input');
-        const clientNameInput = document.getElementById('client-name');
-        const statusMessage = document.getElementById('status-message');
-        const userInfoEl = document.getElementById('user-info');
+        let view = 'maker'; // 'maker' or 'dashboard'
+        let quotation = null; // Will be set in init
+        let savedQuotations = [];
+        let message = '';
 
-        // --- STATE & INITIALIZATION ---
-        let db = null;
-        let auth = null;
-        let userId = null;
-        let currentQuoteId = null;
-        let currentItems = [];
-        let isDashboard = false;
-        
-        // New state for serial ID generation
-        let nextQuoteNumber = 0; // The highest saved quote number (e.g., 5 for Q-005)
-        let tempQuoteNumber = 0; // The number for the unsaved new quote (e.g., 6 for Q-006)
-        // FIX: Ensuring the counter path is within the public data area for global read/write permissions
-        const COUNTER_DOC_PATH = `artifacts/${appId}/public/data/quotationMetadata/appCounter`;
+        // --- Utility Functions ---
 
-        // Utility to format currency
-        const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
-        };
-        
-        // Utility to format the serial ID
-        const formatSerialId = (number) => {
-            return `Q-${String(number).padStart(3, '0')}`;
-        };
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+        const todaysDate = new Date().toISOString().substring(0, 10);
 
-        // --- FIREBASE INITIALIZATION AND AUTHENTICATION ---
-        async function initializeFirebase() {
+        const createNewQuotation = (clientName = '', quoteId = generateId()) => ({
+            id: quoteId,
+            clientName: clientName,
+            date: todaysDate,
+            title: clientName ? `Quotation for ${clientName}` : 'New Quotation',
+            items: [
+                { id: generateId(), requirement: 'Sound System Setup', amount: 5000, remark: 'Basic Package' },
+                { id: generateId(), requirement: 'Stage & Lighting', amount: 15000, remark: 'Standard Package' },
+            ],
+            isSaved: false,
+            updatedAt: new Date().getTime(),
+        });
+
+        const loadQuotations = () => {
             try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        userInfoEl.textContent = `User ID: ${userId}`;
-                        // Start counter listener before other listeners
-                        initializeCounter(); 
-                        setupListeners();
-                        dateInput.value = new Date().toISOString().substring(0, 10);
-                        // The newQuote() will be called once the counter is initialized
-                    } else {
-                        console.error("Authentication failed. Cannot access Firestore.");
-                    }
-                });
-
-            } catch (error) {
-                console.error("Error initializing Firebase:", error);
+                const serializedState = localStorage.getItem(STORAGE_KEY);
+                return serializedState ? JSON.parse(serializedState) : [];
+            } catch (err) {
+                console.error("Error loading state from localStorage:", err);
+                return [];
             }
-        }
-        
-        // Initializes the serial number counter
-        function initializeCounter() {
-            if (!db) return;
+        };
 
-            // Listen to the public counter document to get the highest saved number
-            onSnapshot(doc(db, COUNTER_DOC_PATH), (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    nextQuoteNumber = data.lastNumber || 0; 
-                } else {
-                    nextQuoteNumber = 0;
-                }
-                
-                // Ensure the unsaved temp number is never behind the saved number
-                if (tempQuoteNumber < nextQuoteNumber) {
-                    tempQuoteNumber = nextQuoteNumber;
-                }
-                
-                // Start a new quote only once on load when the counter is ready
-                if (!currentQuoteId) {
-                    newQuote();
-                }
-            }, (error) => {
-                // Log error but proceed if possible, as it might just be a first-time setup or a rule delay
-                console.error("Error listening to counter:", error);
-                showMessage("Error loading quotation counter. Check permissions.", "error");
-            });
-        }
-
-
-        // --- CORE QUOTATION LOGIC ---
-        
-        // 1. Calculate Total
-        function recalculateTotal() {
-            const total = currentItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-            totalAmountEl.textContent = formatCurrency(total);
-            totalAmountEl.dataset.total = total;
-        }
-
-        // 2. Render Table Rows
-        function renderItems() {
-            quoteBody.innerHTML = ''; // Clear existing rows
-            currentItems.forEach((item, index) => {
-                const row = quoteBody.insertRow();
-                row.className = 'hover:bg-gray-50 transition duration-100';
-                
-                // Cell 1: Requirements (Description)
-                row.insertCell().innerHTML = `
-                    <input type="text" value="${item.description}" data-field="description" data-index="${index}" placeholder="Item description" class="editable-cell w-full px-4 py-2 border-none outline-none focus:ring-0 bg-transparent text-gray-800" />
-                `;
-
-                // Cell 2: Amount
-                const amountCell = row.insertCell();
-                amountCell.className = 'text-right font-medium text-gray-700';
-                amountCell.innerHTML = `
-                    <input type="number" value="${item.amount || ''}" data-field="amount" data-index="${index}" placeholder="0.00" class="editable-cell text-right w-full px-4 py-2 border-none outline-none focus:ring-0 bg-transparent text-indigo-600 font-bold" min="0" />
-                `;
-
-                // Cell 3: Remark
-                row.insertCell().innerHTML = `
-                    <input type="text" value="${item.remark}" data-field="remark" data-index="${index}" placeholder="Notes/terms" class="editable-cell w-full px-4 py-2 border-none outline-none focus:ring-0 bg-transparent text-gray-600" />
-                `;
-
-                // Cell 4: Delete Button (No Print)
-                const deleteCell = row.insertCell();
-                deleteCell.className = 'no-print text-center';
-                deleteCell.innerHTML = `
-                    <button class="delete-item-btn text-red-500 hover:text-red-700 transition duration-150 p-2 rounded-full hover:bg-red-50" data-index="${index}">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-3 0h14"></path></svg>
-                    </button>
-                `;
-            });
-            recalculateTotal();
-            setupItemEventListeners();
-        }
-
-        // 3. Add Item
-        function addItem() {
-            currentItems.push({
-                description: '',
-                amount: 0,
-                remark: ''
-            });
-            renderItems();
-        }
-
-        // 4. Update Item Data
-        function updateItem(index, field, value) {
-            if (currentItems[index]) {
-                if (field === 'amount') {
-                    const numValue = parseFloat(value) || 0;
-                    currentItems[index].amount = numValue;
-                } else {
-                    currentItems[index][field] = value;
-                }
-                recalculateTotal();
+        const saveQuotationsToStorage = (quotes) => {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes));
+            } catch (err) {
+                console.error("Error saving state to localStorage:", err);
             }
-        }
+        };
 
-        // 5. Delete Item
-        function deleteItem(index) {
-            currentItems.splice(index, 1);
-            renderItems();
-        }
+        const totalAmount = (quote) => {
+            return quote.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        };
 
-        // 6. Set up Item Event Listeners
-        function setupItemEventListeners() {
-            document.querySelectorAll('.editable-cell').forEach(input => {
-                input.oninput = (e) => {
-                    const index = parseInt(e.target.dataset.index);
-                    const field = e.target.dataset.field;
-                    updateItem(index, field, e.target.value);
-                };
-            });
-            document.querySelectorAll('.delete-item-btn').forEach(button => {
-                button.onclick = (e) => {
-                    const index = parseInt(e.currentTarget.dataset.index);
-                    deleteItem(index);
-                };
-            });
-        }
+        const updateMessage = (text, isError = false) => {
+            message = text;
+            renderMessage();
+        };
 
-        // --- DASHBOARD AND DATA PERSISTENCE ---
+        // --- Core Logic ---
 
-        // 1. Get Quotation Data Object
-        function getQuotationData() {
-            const total = parseFloat(totalAmountEl.dataset.total);
-            return {
-                clientName: clientNameInput.value.trim() || `Quotation ${currentQuoteId}`,
-                date: dateInput.value,
-                items: currentItems.filter(item => item.description || item.amount > 0 || item.remark), // Only save non-empty rows
-                totalAmount: total,
-                createdAt: serverTimestamp(),
-                userId: userId,
-                quoteId: currentQuoteId
-            };
-        }
+        const handleQuotationChange = (field, value) => {
+            quotation[field] = value;
+            quotation.isSaved = false;
+            renderMakerContent(); // Only re-render the maker content
+        };
 
-        // 2. Save Quotation to Firestore
-        async function saveQuotation() {
-            if (!userId) {
-                console.error("User not authenticated. Cannot save.");
-                showMessage("Authentication error. Cannot save.", "error");
-                return;
+        const handleItemChange = (itemId, field, value) => {
+            const item = quotation.items.find(i => i.id === itemId);
+            if (item) {
+                item[field] = (field === 'amount' ? (Number(value) || 0) : value);
+                quotation.isSaved = false;
+                renderMakerContent();
             }
-            if (!currentQuoteId) {
-                showMessage("Quote ID not generated yet. Please wait.", "error");
+        };
+
+        const handleAddItem = () => {
+            quotation.items.push({ id: generateId(), requirement: '', amount: 0, remark: '' });
+            quotation.isSaved = false;
+            renderMakerContent();
+        };
+
+        const handleDeleteItem = (itemId) => {
+            quotation.items = quotation.items.filter(item => item.id !== itemId);
+            quotation.isSaved = false;
+            renderMakerContent();
+        };
+
+        // --- CRUD Operations ---
+
+        const handleSaveQuotation = () => {
+            if (!quotation.clientName || quotation.items.length === 0) {
+                updateMessage("Client Name and at least one item are required to save the quotation.");
                 return;
             }
 
-            const data = getQuotationData();
-            const collectionPath = `artifacts/${appId}/users/${userId}/quotations`;
-            const isSerialId = currentQuoteId.startsWith('Q-'); 
-
             try {
-                // If the ID is a serial ID, parse the number
-                let quoteNumber = isSerialId ? parseInt(currentQuoteId.substring(2)) : null;
-                
-                if (isSerialId && quoteNumber > nextQuoteNumber) {
-                    // CASE A: Saving a brand new quote with the next available serial ID
-                    
-                    // 1. Save the actual quotation using the serial ID as the document ID
-                    const docRef = doc(db, collectionPath, currentQuoteId);
-                    await setDoc(docRef, data); 
-                    
-                    // 2. Update the public counter to finalize this number
-                    const counterRef = doc(db, COUNTER_DOC_PATH);
-                    await setDoc(counterRef, { lastNumber: quoteNumber }, { merge: true });
-                    
-                    // Update the local temp number to match the finalized number
-                    tempQuoteNumber = quoteNumber;
+                const quoteToSave = {
+                    ...quotation,
+                    total: totalAmount(quotation),
+                    updatedAt: new Date().getTime(),
+                    isSaved: true,
+                };
 
-                    showMessage(`Quotation ${currentQuoteId} saved successfully!`, "success");
-                    
+                let updatedQuotes;
+                const existingIndex = savedQuotations.findIndex(q => q.id === quotation.id);
+
+                if (existingIndex !== -1) {
+                    // Update existing quotation
+                    updatedQuotes = savedQuotations.map((q, index) => 
+                        index === existingIndex ? quoteToSave : q
+                    );
                 } else {
-                    // CASE B: Updating an existing quote (Serial ID <= nextQuoteNumber)
-                    // The document ID is already finalized and exists in the database.
-                    const docRef = doc(db, collectionPath, currentQuoteId);
-                    await setDoc(docRef, data, { merge: true });
-                    showMessage("Quotation updated successfully!", "success");
+                    // Add new quotation
+                    updatedQuotes = [quoteToSave, ...savedQuotations];
                 }
-
+                
+                // Update state and storage
+                savedQuotations = updatedQuotes;
+                saveQuotationsToStorage(savedQuotations);
+                quotation = quoteToSave; 
+                
+                updateMessage(`Quotation '${quotation.title}' saved successfully to your browser storage!`);
+                renderMakerContent(); // Re-render to show saved status
+                renderDashboard(); // Update dashboard count if visible
             } catch (error) {
-                console.error("Error saving quotation:", error);
-                showMessage("Error saving quotation. See console for details.", "error");
+                console.error("Error saving quotation to local storage:", error);
+                updateMessage("Failed to save quotation.");
             }
-        }
-        
-        // 3. Delete Quotation from Firestore
-        async function deleteQuotation(quoteId) {
-            if (!userId) return;
-            const collectionPath = `artifacts/${appId}/users/${userId}/quotations`;
+        };
+
+        const handleDeleteQuotation = (quoteId, quoteTitle) => {
             try {
-                await deleteDoc(doc(db, collectionPath, quoteId));
-                showMessage(`Quotation ${quoteId} deleted.`, "success");
+                const updatedQuotes = savedQuotations.filter(q => q.id !== quoteId);
+                
+                savedQuotations = updatedQuotes;
+                saveQuotationsToStorage(savedQuotations);
+                updateMessage(`Quotation '${quoteTitle}' deleted successfully.`);
+
+                // If the deleted quote was the one currently being edited, reset the maker
+                if (quotation && quotation.id === quoteId) {
+                    quotation = createNewQuotation();
+                }
+                renderApp(); // Rerender both dashboard and current quote
             } catch (error) {
                 console.error("Error deleting quotation:", error);
-                showMessage("Error deleting quotation. See console for details.", "error");
+                updateMessage("Failed to delete quotation.");
+            }
+        };
+
+        const handleLoadQuotation = (quote) => {
+            quotation = quote;
+            view = 'maker';
+            updateMessage(`Editing loaded quotation: ${quote.title}`);
+            renderApp();
+        };
+        
+        const handleNewQuotation = () => {
+            quotation = createNewQuotation();
+            view = 'maker';
+            updateMessage('Started new quotation.');
+            renderApp();
+        };
+
+        const handlePrint = () => {
+            window.print();
+        };
+
+        const setView = (newView) => {
+            view = newView;
+            renderApp();
+        };
+
+        // --- Rendering Functions ---
+
+        const renderMessage = () => {
+            const container = document.getElementById('app-container');
+            let messageDiv = document.getElementById('app-message');
+
+            if (messageDiv) {
+                messageDiv.remove();
+            }
+
+            if (message) {
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'app-message';
+                messageDiv.className = "p-3 bg-yellow-100 text-yellow-800 border-l-4 border-yellow-500 flex justify-between items-center print:hidden";
+                messageDiv.innerHTML = `
+                    <span>${message}</span>
+                    <button onclick="message = ''; renderMessage();" class="text-yellow-600 font-bold ml-4">×</button>
+                `;
+                container.prepend(messageDiv);
             }
         }
 
-        // 4. Listen for All Quotations (Dashboard)
-        function setupDashboardListener() {
-            if (!userId) return;
-            const collectionPath = `artifacts/${appId}/users/${userId}/quotations`;
-            const q = query(collection(db, collectionPath));
+        const renderNavigation = () => {
+            return `
+                <div class="flex justify-start space-x-4 p-4 border-b border-gray-200 bg-white shadow-md print:hidden">
+                    <button 
+                        onclick="setView('maker')"
+                        class="px-4 py-2 rounded-full text-sm font-semibold transition duration-150 ${view === 'maker' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'}"
+                    >
+                        Quotation Maker
+                    </button>
+                    <button 
+                        onclick="setView('dashboard')"
+                        class="px-4 py-2 rounded-full text-sm font-semibold transition duration-150 ${view === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'}"
+                    >
+                        Saved Quotations Dashboard (${savedQuotations.length})
+                    </button>
+                </div>
+            `;
+        };
 
-            onSnapshot(q, (querySnapshot) => {
-                const quotationsListEl = document.getElementById('quotations-list');
-                quotationsListEl.innerHTML = '';
-                
-                if (querySnapshot.empty) {
-                    quotationsListEl.innerHTML = '<p class="text-gray-500">No saved quotations found yet. Create one!</p>';
-                    return;
-                }
+        const renderHeader = (title) => {
+            return `
+                <div class="flex flex-col items-center justify-center p-6 bg-gray-50 border-b-4 border-red-500 rounded-t-xl print:border-red-500 print:p-2 print:rounded-none print:shadow-none">
+                    <div class="text-4xl font-extrabold text-red-700 tracking-widest leading-none">
+                        CHENNAI <span class="font-serif italic text-4xl">GRACY BOY'S</span>
+                    </div>
+                    <div class="text-lg font-semibold text-gray-800 mt-1 mb-2 border-b-2 border-gray-400">
+                        A & Z EVENT COMPANY
+                    </div>
+                    <div class="text-sm text-center text-gray-600 leading-tight">
+                        SAINAGAR 1ST MAIN ROAD VIRUGAMBAKKAM <br/>
+                        Ch:600092
+                    </div>
+                    <div class="w-full h-1 my-4 bg-gray-300 print:my-1"></div>
+                    <h1 class="text-2xl font-bold text-gray-900 mt-2">${title}</h1>
+                </div>
+            `;
+        };
 
-                querySnapshot.forEach((doc) => {
-                    const quote = doc.data();
-                    const quoteId = doc.id;
-                    // Use quote.date if available, otherwise N/A
-                    const dateDisplay = quote.date ? new Date(quote.date).toLocaleDateString() : 'N/A';
-                    const createdAt = quote.createdAt?.toDate ? quote.createdAt.toDate().toLocaleDateString() : 'N/A';
-                    
-                    // Truncate UUIDs for display but show full serial IDs
-                    const displayId = quoteId.startsWith('Q-') ? quoteId : `${quoteId.substring(0, 8)}...`;
+        const renderFooter = () => {
+            return `
+                <div class="p-6 bg-gray-50 border-t-4 border-red-500 rounded-b-xl mt-8 print:border-red-500 print:p-2 print:mt-4 print:rounded-none print:shadow-none">
+                    <div class="text-sm font-bold text-gray-700">
+                        MASTER: ARUL DOSS D
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        PH: +91 8838414818 \\ +91 7358286678
+                    </div>
+                    <div class="w-full h-1 my-4 bg-gray-300 print:my-1"></div>
+                    <div class="text-xs text-center text-gray-500">
+                        This is a computer generated quotation and may not require a signature.
+                    </div>
+                </div>
+            `;
+        };
 
-                    const itemEl = document.createElement('div');
-                    itemEl.className = 'flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm';
-                    itemEl.innerHTML = `
-                        <div>
-                            <p class="font-semibold text-lg text-indigo-600">${quote.clientName}</p>
-                            <p class="text-sm text-gray-500 mt-1">
-                                ID: <span class="font-mono text-xs">${displayId}</span> | Date: ${dateDisplay} | Created: ${createdAt}
-                            </p>
-                            <p class="font-bold text-gray-800 mt-2">Total: ${formatCurrency(quote.totalAmount || 0)}</p>
-                        </div>
-                        <div class="mt-3 md:mt-0 flex space-x-2">
-                            <button data-id="${quoteId}" class="load-btn px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition">
-                                Load & Edit
-                            </button>
-                            <button data-id="${quoteId}" class="delete-btn px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition">
-                                Delete
-                            </button>
-                        </div>
-                    `;
-                    quotationsListEl.appendChild(itemEl);
-                });
+        const renderMakerContent = () => {
+            if (!quotation) return '';
 
-                // Attach event listeners to load/delete buttons
-                document.querySelectorAll('.load-btn').forEach(btn => {
-                    btn.onclick = (e) => loadQuotation(e.target.dataset.id);
-                });
-                document.querySelectorAll('.delete-btn').forEach(btn => {
-                    btn.onclick = (e) => deleteQuotation(e.target.dataset.id);
-                });
-            }, (error) => {
-                console.error("Error fetching quotations:", error);
-                document.getElementById('quotations-list').innerHTML = '<p class="text-red-500">Error loading data. Check console.</p>';
-            });
-        }
+            const itemsHtml = quotation.items.map(item => `
+                <tr key="${item.id}" class="hover:bg-indigo-50 transition duration-100">
+                    <td class="p-3 whitespace-nowrap">
+                        <input 
+                            type="text" 
+                            value="${item.requirement}" 
+                            onchange="handleItemChange('${item.id}', 'requirement', this.value)"
+                            class="w-full p-2 border-none focus:ring-0 focus:outline-none bg-transparent print:border-none print:p-0"
+                            placeholder="e.g. Catering, Artist Fee"
+                        />
+                    </td>
+                    <td class="p-3 whitespace-nowrap">
+                        <input 
+                            type="number" 
+                            value="${item.amount}" 
+                            onchange="handleItemChange('${item.id}', 'amount', this.value)"
+                            class="w-full p-2 border-none focus:ring-0 focus:outline-none text-right font-medium text-indigo-700 bg-transparent print:border-none print:p-0"
+                            placeholder="0"
+                        />
+                    </td>
+                    <td class="p-3">
+                        <input 
+                            type="text" 
+                            value="${item.remark}" 
+                            onchange="handleItemChange('${item.id}', 'remark', this.value)"
+                            class="w-full p-2 border-none focus:ring-0 focus:outline-none text-gray-500 bg-transparent print:border-none print:p-0"
+                            placeholder="Additional details"
+                        />
+                    </td>
+                    <td class="p-3 text-right print:hidden">
+                        <button 
+                            onclick="handleDeleteItem('${item.id}')"
+                            class="text-red-600 hover:text-red-900 transition duration-150 p-1 rounded-full hover:bg-red-100"
+                            aria-label="Delete item"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
 
-        // 5. Load Quotation from Firestore
-        async function loadQuotation(quoteId) {
-            const collectionPath = `artifacts/${appId}/users/${userId}/quotations`;
-            const docRef = doc(db, collectionPath, quoteId);
-            
-            try {
-                // Use onSnapshot to load the single document
-                const unsubscribe = onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const quote = docSnap.data();
-                        clientNameInput.value = quote.clientName || '';
-                        dateInput.value = quote.date || new Date().toISOString().substring(0, 10);
-                        currentQuoteId = quoteId;
-                        quoteIdEl.textContent = quoteId;
-                        currentItems = quote.items || [];
+            const currentTotal = totalAmount(quotation).toLocaleString('en-IN');
+            const savedStatus = quotation.isSaved ? 'Status: Saved' : 'Status: Unsaved Changes';
+            const saveButtonText = quotation.isSaved ? 'Saved' : 'Save Quotation';
+            const saveButtonClass = quotation.isSaved ? 'bg-gray-400' : 'bg-green-600 text-white hover:bg-green-700';
+
+            return `
+                <div class="p-4 md:p-8 flex justify-center min-h-[80vh] bg-gray-100 print:p-0 print:m-0 print:bg-white">
+                    <div id="printable-quotation" class="w-full max-w-4xl bg-white shadow-2xl rounded-xl transition-shadow duration-300 hover:shadow-3xl print:shadow-none print:w-full print:max-w-full print:rounded-none">
                         
-                        // If loading a serial ID quote, make sure the temporary number is not less than the loaded one
-                        if (quoteId.startsWith('Q-')) {
-                            const loadedNumber = parseInt(quoteId.substring(2));
-                            if (loadedNumber > tempQuoteNumber) {
-                                tempQuoteNumber = loadedNumber;
-                            }
-                        }
+                        ${renderHeader("EVENT QUOTATION")}
+                        
+                        <!-- Client & Date Block -->
+                        <div class="p-6 print:p-4 border-b border-gray-200">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="flex items-center">
+                                    <label for="clientName" class="font-semibold text-gray-700 w-24">Client Name:</label>
+                                    <input 
+                                        id="clientName"
+                                        type="text" 
+                                        value="${quotation.clientName}" 
+                                        onchange="handleQuotationChange('clientName', this.value)"
+                                        class="flex-grow p-2 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 print:border-none print:ring-0 print:p-0 print:font-bold"
+                                        placeholder="Enter client name"
+                                    />
+                                </div>
+                                <div class="flex items-center md:justify-end">
+                                    <label for="date" class="font-semibold text-gray-700 w-24">Date:</label>
+                                    <input 
+                                        id="date"
+                                        type="date" 
+                                        value="${quotation.date}" 
+                                        onchange="handleQuotationChange('date', this.value)"
+                                        class="p-2 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 print:border-none print:ring-0 print:p-0"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
-                        renderItems();
-                        showMessage(`Quotation '${quote.clientName}' loaded successfully.`, "success");
-                        toggleDashboard();
-                        unsubscribe(); // Stop listening to this specific doc once loaded
-                    } else {
-                        showMessage("Error: Quotation not found.", "error");
-                        unsubscribe();
-                    }
-                }, (error) => {
-                    console.error("Error loading quotation:", error);
-                    showMessage("Error loading quotation. Check console.", "error");
-                    unsubscribe();
-                });
-                
-            } catch (error) {
-                console.error("Error during quote loading:", error);
-                showMessage("An error occurred during loading.", "error");
-            }
-        }
-        
-        // 6. Start a New Quote
-        function newQuote() {
-            // Check if the counter is initialized
-            if (!db || !userId) {
-                showMessage("Initializing application...", "info");
-                return;
-            }
-            
-            // Increment the temporary ID for the new unsaved session
-            // This number will be finalized upon successful save.
-            tempQuoteNumber = nextQuoteNumber + 1;
-            currentQuoteId = formatSerialId(tempQuoteNumber);
-            
-            quoteIdEl.textContent = currentQuoteId;
-            clientNameInput.value = '';
-            dateInput.value = new Date().toISOString().substring(0, 10);
-            
-            currentItems = [
-                { description: 'Initial Requirement 1', amount: 10000, remark: '' },
-                { description: 'Initial Requirement 2', amount: 5000, remark: 'Optional' }
-            ];
-            renderItems();
-            showMessage(`New Quotation started. ID: ${currentQuoteId}`, "info");
-        }
+                        <!-- Quotation Table -->
+                        <div class="p-6 print:p-4">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-300 border border-gray-300 rounded-lg">
+                                    <thead class="bg-indigo-600 text-white">
+                                        <tr>
+                                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider w-1/4">Requirement</th>
+                                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider w-1/4">Amount (₹)</th>
+                                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider w-2/5">Remark</th>
+                                            <th scope="col" class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider print:hidden"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        ${itemsHtml}
+                                    </tbody>
+                                    <tfoot class="bg-gray-100 print:bg-white">
+                                        <tr>
+                                            <td colspan="4" class="p-3 text-center print:hidden">
+                                                <button 
+                                                    onclick="handleAddItem()"
+                                                    class="text-indigo-600 hover:text-indigo-800 transition duration-150 font-semibold flex items-center justify-center w-full py-2"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                                                    Add Requirement
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr class="border-t-2 border-indigo-600 font-extrabold text-lg">
+                                            <td colspan="2" class="p-3 text-right text-gray-800">TOTAL AMOUNT:</td>
+                                            <td colspan="2" class="p-3 text-right text-indigo-700">₹ ${currentTotal}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
 
+                        ${renderFooter()}
+                        
+                        <!-- Actions (Hidden on Print) -->
+                        <div class="flex justify-between items-center p-6 bg-gray-50 border-t border-gray-200 print:hidden">
+                            <div class="text-sm font-medium text-green-600">
+                                ${savedStatus}
+                            </div>
+                            <div class="space-x-4">
+                                <button 
+                                    onclick="handlePrint()"
+                                    class="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg shadow-md hover:bg-purple-600 transition duration-150"
+                                >
+                                    Download / Print PDF
+                                </button>
+                                <button 
+                                    onclick="handleSaveQuotation()"
+                                    ${quotation.isSaved ? 'disabled' : ''}
+                                    class="px-6 py-2 font-semibold rounded-lg shadow-lg transition duration-150 ${saveButtonClass}"
+                                >
+                                    ${saveButtonText}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
 
-        // --- UI UTILITIES ---
+        const renderDashboard = () => {
+            const sortedQuotes = savedQuotations
+                .slice() // Create a copy for sorting
+                .sort((a, b) => b.updatedAt - a.updatedAt); 
 
-        function toggleDashboard() {
-            isDashboard = !isDashboard;
-            if (isDashboard) {
-                editorView.classList.add('hidden');
-                dashboardView.classList.remove('hidden');
-                toggleDashboardBtn.textContent = 'Back to Quotation Editor';
-                setupDashboardListener(); // Ensure listener is active
+            const quotesHtml = sortedQuotes.map(quote => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${quote.clientName || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${quote.date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-700">₹ ${quote.total.toLocaleString('en-IN') || 0}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button 
+                            onclick="handleLoadQuotation(${JSON.stringify(quote).replace(/"/g, '&quot;')})"
+                            class="text-indigo-600 hover:text-indigo-900 text-sm font-semibold p-2 rounded-lg hover:bg-indigo-50 transition"
+                        >
+                            Edit
+                        </button>
+                        <button 
+                            onclick="handleDeleteQuotation('${quote.id}', '${quote.title}')"
+                            class="text-red-600 hover:text-red-900 text-sm font-semibold p-2 rounded-lg hover:bg-red-50 transition"
+                        >
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            const dashboardContent = savedQuotations.length === 0 ? `
+                <div class="bg-white p-6 rounded-xl shadow-md text-center text-gray-500">
+                    No saved quotations found. Create one in the Quotation Maker tab!
+                </div>
+            ` : `
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title / Client</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${quotesHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            return `
+                <div class="p-4 md:p-8 min-h-screen bg-gray-100">
+                    <div class="max-w-6xl mx-auto">
+                        <h1 class="text-3xl font-bold text-gray-800 mb-6">Saved Quotations Dashboard</h1>
+                        <p class="text-gray-500 mb-6">
+                            <span class='text-sm font-bold text-red-600'>⚠ Local Storage Warning:</span> 
+                            <span class='ml-2 text-sm'>
+                                Your data is now saved only in your **browser's local storage**. It will be lost if you clear your browser data or switch devices.
+                            </span>
+                        </p>
+
+                        <div class="mb-4">
+                            <button 
+                                onclick="handleNewQuotation()"
+                                class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 flex items-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                                Create New Quote
+                            </button>
+                        </div>
+                        ${dashboardContent}
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderApp = () => {
+            const appContainer = document.getElementById('app-container');
+            let contentHtml = renderNavigation();
+
+            if (view === 'maker') {
+                contentHtml += renderMakerContent();
             } else {
-                dashboardView.classList.add('hidden');
-                editorView.classList.remove('hidden');
-                toggleDashboardBtn.textContent = 'View Saved Quotations';
+                contentHtml += renderDashboard();
             }
-        }
+            
+            appContainer.innerHTML = contentHtml;
+            renderMessage(); // Ensure message is rendered after content update
+        };
 
-        function showMessage(message, type = "info") {
-            statusMessage.textContent = message;
-            statusMessage.className = `text-sm text-center font-medium h-6 mt-2 ${type === 'success' ? 'text-green-600' : type === 'error' ? 'text-red-600' : 'text-gray-700'}`;
-            setTimeout(() => {
-                statusMessage.textContent = '';
-                statusMessage.className = 'text-sm text-center font-medium text-gray-700 h-6';
-            }, 3000);
-        }
-        
-        // --- DOWNLOAD/PDF GENERATION ---
-        
-        function downloadPDF() {
-            showMessage("Generating PDF...", "info");
-            
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'pt', 'a4');
-            
-            const input = document.getElementById('quotation-page');
-            
-            // Use html2canvas to capture the HTML element
-            html2canvas(input, { 
-                scale: 2, // Higher resolution
-                useCORS: true, 
-                scrollY: -window.scrollY // Ensure capture starts from top
-            }).then((canvas) => {
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 595.28; // A4 width in points
-                const pageHeight = 841.89; // A4 height in points
-                const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight;
-                let position = 0;
-                
-                // Add the image to the PDF
-                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-                
-                // Handle pagination if the content overflows a single page
-                while (heightLeft >= 0) {
-                    position = heightLeft - imgHeight;
-                    doc.addPage();
-                    doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                }
-                
-                const filename = (clientNameInput.value.trim() || currentQuoteId || 'Quotation') + '.pdf';
-                doc.save(filename);
-                showMessage("PDF downloaded successfully!", "success");
-            }).catch(error => {
-                console.error("Error generating PDF:", error);
-                showMessage("Error generating PDF. See console.", "error");
-            });
-        }
+        // --- Initialization ---
 
-        // --- GLOBAL EVENT LISTENERS ---
-        function setupListeners() {
-            document.getElementById('add-item-btn').onclick = addItem;
-            document.getElementById('save-btn').onclick = saveQuotation;
-            document.getElementById('download-btn').onclick = downloadPDF;
-            document.getElementById('new-quote-btn').onclick = newQuote;
-            toggleDashboardBtn.onclick = toggleDashboard;
-            
-            // General input listener for client name and date
-            clientNameInput.oninput = () => { /* Implicitly triggers save prompt or is saved on button click */ };
-            dateInput.onchange = () => { /* Implicitly triggers save prompt or is saved on button click */ };
-            
-            // No initial addItem() call here, as newQuote() is called after counter is ready.
-        }
+        const init = () => {
+            savedQuotations = loadQuotations();
+            quotation = createNewQuotation();
+            renderApp();
+        };
 
-        // Start the application
-        initializeFirebase();
-
+        window.onload = init;
     </script>
-
 </body>
 </html>
