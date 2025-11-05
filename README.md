@@ -1,2 +1,0 @@
-# Gracy-boys-quotation
-Quotation
